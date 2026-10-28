@@ -1,0 +1,173 @@
+
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Car Racing</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07111c;color:white;font-family:Arial;text-align:center}
+h2{margin:12px;color:#00eaff}
+#game{width:100%;height:72vh;min-height:400px;display:block;background:#172d25}
+.hud{position:fixed;top:55px;left:12px;z-index:2;text-align:left;
+background:#0009;padding:12px;border-radius:12px;line-height:1.8}
+.controls{display:flex;justify-content:center;gap:22px;padding:12px}
+button{font-size:25px;padding:13px 25px;border:0;border-radius:14px;
+background:#00d9ff;color:#00131b;font-weight:bold;touch-action:manipulation}
+#start{font-size:17px;background:#a6ff00}
+</style>
+</head>
+<body>
+<h2>🏎️ 3D CAR RACING</h2>
+<div class="hud">SPEED: <span id="speed">0</span> km/h<br>
+SCORE: <span id="score">0</span></div>
+<canvas id="game"></canvas>
+<button id="start" onclick="resetGame()">▶ START / RESTART</button>
+<div class="controls">
+<button id="left">⬅️</button>
+<button id="right">➡️</button>
+</div>
+<p>गाडी वळवण्यासाठी बटणे दाबा. दुसऱ्या गाडीला धडकू नका!</p>
+<script>
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+let player=0, traffic=[], score=0, speed=0, running=false;
+let keys={left:false,right:false}, last=0, roadOffset=0;
+
+function resize(){
+ canvas.width=innerWidth*devicePixelRatio;
+ canvas.height=Math.max(400,innerHeight*.72)*devicePixelRatio;
+ canvas.style.height='72vh';
+ ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+addEventListener('resize',resize);resize();
+
+function car(x,y,w,h,color){
+ ctx.fillStyle='#0007';
+ ctx.fillRect(x-w*.58,y+h*.85,w*1.16,h*.18);
+ ctx.fillStyle='#15191e';
+ ctx.fillRect(x-w*.58,y+h*.22,w*.18,h*.3);
+ ctx.fillRect(x+w*.4,y+h*.22,w*.18,h*.3);
+ ctx.fillRect(x-w*.58,y+h*.66,w*.18,h*.25);
+ ctx.fillRect(x+w*.4,y+h*.66,w*.18,h*.25);
+ ctx.fillStyle=color;
+ ctx.beginPath();
+ ctx.moveTo(x-w*.5,y+h);ctx.lineTo(x-w*.44,y+h*.3);
+ ctx.lineTo(x-w*.25,y);ctx.lineTo(x+w*.25,y);
+ ctx.lineTo(x+w*.44,y+h*.3);ctx.lineTo(x+w*.5,y+h);
+ ctx.closePath();ctx.fill();
+ ctx.fillStyle='#9eeeff';
+ ctx.beginPath();
+ ctx.moveTo(x-w*.29,y+h*.34);ctx.lineTo(x-w*.19,y+h*.12);
+ ctx.lineTo(x+w*.19,y+h*.12);ctx.lineTo(x+w*.29,y+h*.34);
+ ctx.closePath();ctx.fill();
+ ctx.fillStyle='#ff3030';
+ ctx.fillRect(x-w*.38,y+h*.83,w*.19,h*.08);
+ ctx.fillRect(x+w*.19,y+h*.83,w*.19,h*.08);
+ ctx.fillStyle='#d9e5ef';
+ ctx.fillRect(x-w*.28,y+h*.48,w*.56,h*.06);
+}
+
+function resetGame(){
+ player=0;traffic=[];score=0;speed=0;running=true;
+ last=0;requestAnimationFrame(loop);
+}
+function draw(t){
+ const W=innerWidth,H=Math.max(400,innerHeight*.72);
+ ctx.clearRect(0,0,W,H);
+ let horizon=H*.28, roadW=W*.78;
+ ctx.fillStyle='#79b8e6';ctx.fillRect(0,0,W,horizon);
+ ctx.fillStyle='#315b35';ctx.fillRect(0,horizon,W,H-horizon);
+ // distant mountains
+ ctx.fillStyle='#577e79';
+ ctx.beginPath();ctx.moveTo(0,horizon);
+ for(let x=0;x<=W;x+=W/8)
+ ctx.lineTo(x,horizon-25-Math.abs(Math.sin(x*.02))*55);
+ ctx.lineTo(W,horizon);ctx.fill();
+ // perspective road
+ let bottom=W*.92, top=W*.09;
+ ctx.fillStyle='#343941';ctx.beginPath();
+ ctx.moveTo(W/2-top/2,horizon);ctx.lineTo(W/2+top/2,horizon);
+ ctx.lineTo(W/2+bottom/2,H);ctx.lineTo(W/2-bottom/2,H);
+ ctx.closePath();ctx.fill();
+ // road edges
+ ctx.strokeStyle='#fff';ctx.lineWidth=4;
+ ctx.beginPath();ctx.moveTo(W/2-top/2,horizon);ctx.lineTo(W/2-bottom/2,H);
+ ctx.moveTo(W/2+top/2,horizon);ctx.lineTo(W/2+bottom/2,H);ctx.stroke();
+ // lane markings
+ roadOffset=(roadOffset+speed*.35)%70;
+ for(let i=0;i<12;i++){
+ let p=((i*70+roadOffset)%H)/H;
+ let y=horizon+p*(H-horizon);
+ let rw=top/2+p*(bottom/2-top/2);
+ let dash=4+p*23;
+ ctx.fillStyle='#f8f5d8';
+ for(let lane of [-1/6,1/6]){
+ let x=W/2+lane*bottom*p;
+ ctx.fillRect(x-dash/8,y,dash/4,dash);
+ }
+ }
+ // scenery
+ for(let i=0;i<9;i++){
+ let p=((i*.13+roadOffset/900)%1);
+ let y=horizon+p*(H-horizon);
+ let rw=top/2+p*(bottom/2-top/2);
+ ctx.fillStyle=i%2?'#20653a':'#347e43';
+ ctx.beginPath();ctx.moveTo(W/2-rw-12-p*35,y);
+ ctx.lineTo(W/2-rw-28-p*40,y-18-p*35);
+ ctx.lineTo(W/2-rw-2-p*35,y-14-p*35);ctx.fill();
+ ctx.beginPath();ctx.moveTo(W/2+rw+12+p*35,y);
+ ctx.lineTo(W/2+rw+28+p*40,y-18-p*35);
+ ctx.lineTo(W/2+rw+2+p*35,y-14-p*35);ctx.fill();
+ }
+ if(running){
+ if(keys.left)player-=.018;
+ if(keys.right)player+=.018;
+ player=Math.max(-.36,Math.min(.36,player));
+ speed=Math.min(180,speed+.12);
+ if(Math.random()<.025+speed/7000)
+ traffic.push({lane:(Math.floor(Math.random()*3)-1)*.23,p:.03,color:['#ffcc22','#f54b58','#42d9ff'][Math.floor(Math.random()*3)]});
+ traffic.forEach(a=>a.p+=.004+speed/24000);
+ traffic=traffic.filter(a=>a.p<1.15);
+ traffic.forEach(a=>{
+ let y=horizon+a.p*(H-horizon);
+ let rw=top/2+a.p*(bottom/2-top/2);
+ let x=W/2+a.lane*bottom*a.p;
+ let w=15+a.p*32,h=25+a.p*58;
+ car(x,y,w,h,a.color);
+ if(a.p>.78&&a.p<.98&&Math.abs(x-(W/2+player*bottom*.43))<w*.85){
+ running=false;speed=0;
+ }
+ });
+ score+=Math.round(speed/40);
+ }
+ car(W/2+player*bottom*.43,H*.72,W*.085,H*.17,'#00cfff');
+ document.getElementById('speed').textContent=Math.round(speed);
+ document.getElementById('score').textContent=score;
+ if(!running){
+ ctx.fillStyle='#0009';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#fff';ctx.textAlign='center';
+ ctx.font='bold 32px Arial';ctx.fillText('GAME OVER',W/2,H/2);
+ ctx.font='18px Arial';ctx.fillText('START दाबून पुन्हा खेळा',W/2,H/2+38);
+ }
+}
+function loop(t){if(!running){draw(t);return}draw(t);requestAnimationFrame(loop)}
+function bind(id,key){
+ const b=document.getElementById(id);
+ b.onpointerdown=e=>{e.preventDefault();keys[key]=true};
+ b.onpointerup=b.onpointercancel=b.onpointerleave=()=>keys[key]=false;
+}
+bind('left','left');bind('right','right');
+addEventListener('keydown',e=>{
+ if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;
+ if(e.key==='ArrowRight'||e.key==='d')keys.right=true;
+});
+addEventListener('keyup',e=>{
+ if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;
+ if(e.key==='ArrowRight'||e.key==='d')keys.right=false;
+});
+draw(0);
+</script>
+</body>
+</html>
